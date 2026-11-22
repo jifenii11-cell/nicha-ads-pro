@@ -2,11 +2,11 @@
 /*******************************************************
  * NICHA ADS PRO
  * FILE: assets/js/app.js
- * VERSION: 1.3.0
+ * VERSION: 1.3.1
  *
  * Frontend + Google Apps Script API
  *
- * ระบบ:
+ * FEATURES:
  * 1. Dashboard
  * 2. Campaign Management
  * 3. Google Sheets Database
@@ -20,7 +20,7 @@
  * - ChatGPT analysis is a manual handoff.
  * - No OpenAI API key required.
  * - POST is dispatched only once.
- * - GET/JSONP verifies saved data.
+ * - GET verifies saved data.
  * - No automatic ad publishing.
  *******************************************************/
 
@@ -31,13 +31,12 @@
 ===================================================== */
 
 const NICHA_ADS = {
-  version: '1.3.0',
+  version: '1.3.1',
 
   apiUrl:
     'https://script.google.com/macros/s/AKfycbzuezJjKGLvKe-5APlnuH6fl6F1HQLeN7tV5_qAvNTK1BsXOo4S_KIQPA_N8sLRR80o/exec',
 
   pageKey: 'NICHA_ADS_PRO_LAST_PAGE',
-
   requestTimeout: 20000,
   verifyAttempts: 6,
   verifyDelay: 1200
@@ -106,7 +105,9 @@ function setButtonLoading(button, loading, originalText) {
   } else {
     button.disabled = false;
     button.textContent =
-      originalText || button.dataset.originalText || 'ดำเนินการ';
+      originalText ||
+      button.dataset.originalText ||
+      'ดำเนินการ';
   }
 }
 
@@ -136,11 +137,6 @@ function normalizeCampaign(item) {
    3. GOOGLE APPS SCRIPT API - GET / JSONP
 ===================================================== */
 
-/**
- * GET ผ่าน JSONP
- *
- * รองรับพารามิเตอร์เพิ่มเติม เช่น campaignId
- */
 function apiGet(action, extraParams = {}) {
   return new Promise((resolve, reject) => {
     const callbackName =
@@ -150,7 +146,6 @@ function apiGet(action, extraParams = {}) {
       Math.floor(Math.random() * 100000);
 
     const script = document.createElement('script');
-
     let finished = false;
 
     const cleanup = () => {
@@ -206,7 +201,8 @@ function apiGet(action, extraParams = {}) {
       }
     });
 
-    script.src = NICHA_ADS.apiUrl +
+    script.src =
+      NICHA_ADS.apiUrl +
       (NICHA_ADS.apiUrl.includes('?') ? '&' : '?') +
       params.toString();
 
@@ -229,14 +225,6 @@ function apiGet(action, extraParams = {}) {
    4. GOOGLE APPS SCRIPT API - POST
 ===================================================== */
 
-/**
- * ส่ง POST เพียงครั้งเดียว
- *
- * no-cors ทำให้ไม่สามารถอ่าน response ได้
- * ต้องตรวจสอบผลด้วย GET อีกครั้ง
- *
- * ห้ามส่ง POST ซ้ำอัตโนมัติ
- */
 async function apiPost(payload) {
   const response = await fetch(NICHA_ADS.apiUrl, {
     method: 'POST',
@@ -255,9 +243,10 @@ async function apiPost(payload) {
   };
 }
 
-/**
- * โหลดรายการแคมเปญจาก Google Sheets
- */
+/* =====================================================
+   5. LOAD DATA
+===================================================== */
+
 async function fetchCampaignsFromServer() {
   const result = await apiGet('campaigns');
 
@@ -268,9 +257,6 @@ async function fetchCampaignsFromServer() {
   return campaigns;
 }
 
-/**
- * โหลดแคมเปญและอัปเดตหน้าจอ
- */
 async function loadCampaigns(options = {}) {
   const silent = options.silent === true;
 
@@ -299,9 +285,6 @@ async function loadCampaigns(options = {}) {
   }
 }
 
-/**
- * โหลด Dashboard จาก Apps Script
- */
 async function loadDashboard(options = {}) {
   const silent = options.silent === true;
 
@@ -325,11 +308,6 @@ async function loadDashboard(options = {}) {
   }
 }
 
-/**
- * ตรวจสอบการเปลี่ยนแปลงจาก Google Sheets
- *
- * ฟังก์ชันนี้ไม่ส่ง POST
- */
 async function verifyServerChange(verifier) {
   let lastError = null;
 
@@ -377,12 +355,13 @@ async function verifyServerChange(verifier) {
 }
 
 /* =====================================================
-   5. NAVIGATION
+   6. NAVIGATION
 ===================================================== */
 
 const pageTitles = {
   dashboard: 'Dashboard',
   analysis: 'AI วิเคราะห์โฆษณา',
+  'ai-analysis': 'AI วิเคราะห์โฆษณา',
   campaigns: 'จัดการแคมเปญ',
   budget: 'จัดการงบประมาณ',
   creative: 'Creative Studio',
@@ -394,7 +373,6 @@ const pageTitles = {
 
 function showPage(pageName) {
   const sections = $all('.page-section');
-
   let found = false;
 
   sections.forEach(section => {
@@ -456,8 +434,20 @@ function showPage(pageName) {
     loadDashboard({ silent: true });
   }
 
-  if (pageName === 'analysis') {
-    renderAIAnalysisCampaignOptions();
+  /*
+   * FIX 1:
+   * รองรับชื่อหน้าจริงจาก index.html คือ ai-analysis
+   */
+  if (
+    pageName === 'ai-analysis' ||
+    pageName === 'analysis'
+  ) {
+    loadCampaigns({ silent: true }).catch(error => {
+      showFreeAIMessage(
+        'โหลดรายการแคมเปญไม่สำเร็จ: ' + error.message,
+        'error'
+      );
+    });
   }
 }
 
@@ -530,7 +520,7 @@ function setupNavigation() {
 }
 
 /* =====================================================
-   6. DASHBOARD
+   7. DASHBOARD
 ===================================================== */
 
 function updateDashboardDisplay() {
@@ -569,7 +559,8 @@ function updateDashboardDisplay() {
   const budgetElement = $('#totalPlannedBudget');
 
   if (budgetElement) {
-    const total = dashboardCache?.totalPlannedBudget ??
+    const total =
+      dashboardCache?.totalPlannedBudget ??
       campaigns.reduce((sum, item) => sum + item.budget, 0);
 
     budgetElement.textContent = formatMoney(total);
@@ -580,7 +571,7 @@ function updateDashboardDisplay() {
 }
 
 /* =====================================================
-   7. CAMPAIGN TABLE
+   8. CAMPAIGN TABLE
 ===================================================== */
 
 function statusLabel(status) {
@@ -600,10 +591,7 @@ function statusLabel(status) {
 function renderCampaigns() {
   const tbody = $('#campaignTable');
 
-  if (!tbody) {
-    console.warn('ไม่พบ #campaignTable ในหน้าเว็บ');
-    return;
-  }
+  if (!tbody) return;
 
   if (!campaignCache.length) {
     tbody.innerHTML = `
@@ -694,7 +682,7 @@ function bindCampaignActions() {
 }
 
 /* =====================================================
-   8. CREATE CAMPAIGN
+   9. CREATE CAMPAIGN
 ===================================================== */
 
 async function createCampaignRecord(data) {
@@ -718,7 +706,7 @@ async function createCampaignRecord(data) {
         name: data.name,
         goal: data.goal,
         platform: data.platform || 'ยังไม่เลือก',
-        targetArea: data.targetArea || 'แม่อ่อน เชียงใหม่',
+        targetArea: data.targetArea || 'ยังไม่ระบุ',
         audience: data.audience || '',
         service: data.service || '',
         offer: data.offer || '',
@@ -750,7 +738,6 @@ async function createCampaignRecord(data) {
         'ชื่อ: ' + campaign.name +
         '\nงบประมาณ: ' + formatMoney(campaign.budget) +
         '\nระยะเวลา: ' + (campaign.days || '-') + ' วัน' +
-        '\nงบเฉลี่ยต่อวัน: ' + formatMoney(campaign.dailyBudget) +
         '\nสถานะ: ฉบับร่าง'
       );
 
@@ -773,7 +760,7 @@ async function createCampaignRecord(data) {
     alert(
       'ไม่สามารถส่งคำสั่งสร้างแคมเปญได้\n\n' +
       error.message +
-      '\n\nกรุณาตรวจสอบชีต Campaigns ก่อนลองใหม่ เพื่อป้องกันข้อมูลซ้ำ'
+      '\n\nกรุณาตรวจสอบชีต Campaigns ก่อนลองใหม่'
     );
 
     return null;
@@ -812,10 +799,7 @@ function openCreateCampaign() {
 
   if (platform === null) return;
 
-  const budgetText = prompt(
-    'งบประมาณรวม (บาท)',
-    '132'
-  );
+  const budgetText = prompt('งบประมาณรวม (บาท)', '132');
 
   if (budgetText === null) return;
 
@@ -837,32 +821,19 @@ function openCreateCampaign() {
     return;
   }
 
-  const targetArea = prompt(
-    'พื้นที่กลุ่มเป้าหมาย',
-    'แม่อ่อน เชียงใหม่'
-  );
-
+  const targetArea = prompt('พื้นที่กลุ่มเป้าหมาย', 'แม่อ่อน เชียงใหม่');
   if (targetArea === null) return;
 
   const audience = prompt(
     'กลุ่มลูกค้าเป้าหมาย',
     'ผู้ที่สนใจนวดเพื่อสุขภาพและสปา'
   );
-
   if (audience === null) return;
 
-  const service = prompt(
-    'บริการที่ต้องการโปรโมต',
-    'นวดเพื่อสุขภาพ'
-  );
-
+  const service = prompt('บริการที่ต้องการโปรโมต', 'นวดเพื่อสุขภาพ');
   if (service === null) return;
 
-  const offer = prompt(
-    'รายละเอียดโปรโมชั่น (ถ้ามี)',
-    ''
-  );
-
+  const offer = prompt('รายละเอียดโปรโมชั่น (ถ้ามี)', '');
   if (offer === null) return;
 
   createCampaignRecord({
@@ -894,7 +865,7 @@ function setupCampaignButtons() {
 }
 
 /* =====================================================
-   9. DELETE CAMPAIGN
+   10. DELETE CAMPAIGN
 ===================================================== */
 
 async function deleteCampaign(id, button) {
@@ -939,9 +910,7 @@ async function deleteCampaign(id, button) {
     }
 
   } catch (error) {
-    alert(
-      'ส่งคำสั่งลบไม่สำเร็จ\n\n' + error.message
-    );
+    alert('ส่งคำสั่งลบไม่สำเร็จ\n\n' + error.message);
 
   } finally {
     apiBusy = false;
@@ -950,7 +919,7 @@ async function deleteCampaign(id, button) {
 }
 
 /* =====================================================
-   10. APPROVAL WORKFLOW
+   11. APPROVAL WORKFLOW
 ===================================================== */
 
 async function submitApproval(id, button) {
@@ -1080,15 +1049,18 @@ async function decideApproval(id, decision, button) {
 }
 
 /* =====================================================
-   11. FREE AI ANALYSIS - USER INTERFACE
+   12. FREE AI - INSTALL INTERFACE
 ===================================================== */
 
-/**
- * เพิ่มส่วน FREE AI เข้าไปในหน้า Analysis
- * โดยไม่ต้องแก้ index.html
- */
 function installAIAnalysisInterface() {
+  /*
+   * FIX:
+   * index.html ใช้ id="page-ai-analysis"
+   * จึงต้องค้นหาด้วย ID นี้โดยตรง
+   */
   const page =
+    $('#page-ai-analysis') ||
+    $('.page-section[data-page-section="ai-analysis"]') ||
     $('.page-section[data-page-section="analysis"]') ||
     $('#page-analysis') ||
     $('#analysis-page') ||
@@ -1101,13 +1073,13 @@ function installAIAnalysisInterface() {
 
   if ($('#nichaFreeAIWorkspace')) return;
 
-  const oldAnalysisButton = $('#analyzeButton');
+  /*
+   * ซ่อนฟอร์มเดิมที่ให้พิมพ์ชื่อแคมเปญเอง
+   */
+  const oldPanel = $('#analysisName')?.closest('.panel');
 
-  if (oldAnalysisButton) {
-    oldAnalysisButton.disabled = true;
-    oldAnalysisButton.textContent = 'ใช้ระบบ FREE AI ด้านล่าง';
-    oldAnalysisButton.title =
-      'ระบบวิเคราะห์เดิมถูกแทนที่ด้วย FREE AI Workflow';
+  if (oldPanel) {
+    oldPanel.remove();
   }
 
   const workspace = document.createElement('div');
@@ -1117,7 +1089,7 @@ function installAIAnalysisInterface() {
   workspace.innerHTML = `
     <style>
       #nichaFreeAIWorkspace {
-        margin-top: 24px;
+        margin-top: 20px;
         color: inherit;
       }
 
@@ -1127,24 +1099,19 @@ function installAIAnalysisInterface() {
         border-radius: 16px;
         padding: 22px;
         margin-bottom: 18px;
-        box-shadow: 0 5px 18px rgba(50, 45, 30, .05);
+        box-shadow: 0 5px 18px rgba(50,45,30,.05);
       }
 
+      #nichaFreeAIWorkspace h2,
       #nichaFreeAIWorkspace h3 {
         color: #414936;
-        margin: 0 0 12px;
-        font-size: 19px;
-      }
-
-      #nichaFreeAIWorkspace p {
-        line-height: 1.7;
       }
 
       #nichaFreeAIWorkspace label {
         display: block;
         font-weight: 600;
         color: #414936;
-        margin: 14px 0 7px;
+        margin: 15px 0 7px;
       }
 
       #nichaFreeAIWorkspace select,
@@ -1165,13 +1132,7 @@ function installAIAnalysisInterface() {
       }
 
       #nichaFreeAIWorkspace button {
-        border: 0;
-        border-radius: 9px;
-        padding: 11px 16px;
         margin: 8px 6px 0 0;
-        cursor: pointer;
-        font: inherit;
-        font-weight: 600;
       }
 
       #nichaFreeAIWorkspace button:disabled {
@@ -1179,27 +1140,12 @@ function installAIAnalysisInterface() {
         cursor: not-allowed;
       }
 
-      #nichaFreeAIWorkspace .nicha-primary {
-        background: #414936;
-        color: #fff;
-      }
-
-      #nichaFreeAIWorkspace .nicha-gold {
-        background: #c6a36b;
-        color: #fff;
-      }
-
-      #nichaFreeAIWorkspace .nicha-light {
-        background: #eee8dc;
-        color: #414936;
-      }
-
       #nichaFreeAIWorkspace .nicha-ai-note {
         background: #f5f0e5;
         border-left: 4px solid #c6a36b;
         padding: 12px 15px;
         border-radius: 7px;
-        line-height: 1.7;
+        line-height: 1.8;
         margin: 12px 0;
       }
 
@@ -1230,15 +1176,9 @@ function installAIAnalysisInterface() {
         color: #315a36;
       }
 
-      #nichaFreeAIWorkspace .nicha-ai-result {
-        border-top: 1px solid #e5dccb;
-        margin-top: 18px;
-        padding-top: 16px;
-      }
-
       #nichaFreeAIWorkspace .nicha-score-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(3,minmax(0,1fr));
         gap: 10px;
         margin: 15px 0;
       }
@@ -1262,13 +1202,13 @@ function installAIAnalysisInterface() {
         color: #444;
       }
 
-      @media (max-width: 600px) {
+      @media(max-width:600px) {
         #nichaFreeAIWorkspace .nicha-ai-card {
           padding: 15px;
         }
 
         #nichaFreeAIWorkspace .nicha-score-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: repeat(2,minmax(0,1fr));
         }
 
         #nichaFreeAIWorkspace button {
@@ -1279,7 +1219,7 @@ function installAIAnalysisInterface() {
     </style>
 
     <div class="nicha-ai-card">
-      <h3>NICHA FREE AI ANALYSIS</h3>
+      <h2>NICHA FREE AI ANALYSIS</h2>
 
       <p>
         ระบบช่วยวิเคราะห์แคมเปญด้วย ChatGPT
@@ -1288,13 +1228,13 @@ function installAIAnalysisInterface() {
 
       <div class="nicha-ai-note">
         <strong>ขั้นตอนการทำงาน</strong><br>
-        1. เลือกแคมเปญ<br>
+        1. เลือกแคมเปญจากรายการในระบบ<br>
         2. สร้างคำสั่งสำหรับ ChatGPT<br>
         3. เปิด ChatGPT และส่งคำสั่ง<br>
         4. นำผลลัพธ์ JSON กลับมาวาง<br>
         5. บันทึกผลลง Google Sheets<br><br>
         ระบบนี้เป็นการส่งต่อให้ ChatGPT ด้วยตนเอง
-        ไม่ได้เรียก AI อัตโนมัติ และไม่มีการยิงโฆษณาจริง
+        ไม่มีการยิงโฆษณาอัตโนมัติ
       </div>
 
       <label for="nichaAIcampaignSelect">
@@ -1305,6 +1245,13 @@ function installAIAnalysisInterface() {
         <option value="">กำลังโหลดรายการแคมเปญ...</option>
       </select>
 
+      <button
+        type="button"
+        id="nichaAIReloadCampaigns"
+        class="outline-button">
+        ↻ โหลดรายการแคมเปญใหม่
+      </button>
+
       <div id="nichaAIcampaignInfo" class="nicha-ai-note">
         กรุณาเลือกแคมเปญ
       </div>
@@ -1312,21 +1259,21 @@ function installAIAnalysisInterface() {
       <button
         type="button"
         id="nichaAIGeneratePrompt"
-        class="nicha-primary">
+        class="primary-button">
         1. สร้างคำสั่งวิเคราะห์
       </button>
 
       <button
         type="button"
         id="nichaAICopyPrompt"
-        class="nicha-light">
+        class="outline-button">
         คัดลอกคำสั่ง
       </button>
 
       <button
         type="button"
         id="nichaAIOpenChatGPT"
-        class="nicha-gold">
+        class="primary-button">
         2. เปิด ChatGPT
       </button>
 
@@ -1336,8 +1283,8 @@ function installAIAnalysisInterface() {
 
       <textarea
         id="nichaAIPrompt"
-        placeholder="กดสร้างคำสั่งวิเคราะห์ ระบบจะเตรียมข้อมูลให้ตรงนี้"
-      ></textarea>
+        placeholder="กดสร้างคำสั่งวิเคราะห์ ระบบจะเตรียมข้อมูลให้ตรงนี้">
+      </textarea>
 
       <div class="nicha-ai-note">
         เมื่อ ChatGPT วิเคราะห์เสร็จแล้ว
@@ -1350,20 +1297,20 @@ function installAIAnalysisInterface() {
 
       <textarea
         id="nichaAIResponse"
-        placeholder='วางผลลัพธ์ JSON เช่น {"creativeScore":80,...}'
-      ></textarea>
+        placeholder="วางผลลัพธ์ JSON จาก ChatGPT ตรงนี้">
+      </textarea>
 
       <button
         type="button"
         id="nichaAISaveAnalysis"
-        class="nicha-primary">
+        class="primary-button">
         4. บันทึกผลวิเคราะห์ลง Google Sheets
       </button>
 
       <button
         type="button"
         id="nichaAILoadLatest"
-        class="nicha-light">
+        class="outline-button">
         โหลดผลวิเคราะห์ล่าสุด
       </button>
 
@@ -1376,7 +1323,7 @@ function installAIAnalysisInterface() {
 
       <div
         id="nichaAILatestResult"
-        class="nicha-ai-result">
+        style="margin-top:20px">
         <p>ยังไม่ได้โหลดผลวิเคราะห์</p>
       </div>
     </div>
@@ -1389,7 +1336,7 @@ function installAIAnalysisInterface() {
 }
 
 /* =====================================================
-   12. FREE AI - CAMPAIGN SELECTOR
+   13. FREE AI - CAMPAIGN SELECTOR
 ===================================================== */
 
 function renderAIAnalysisCampaignOptions() {
@@ -1402,7 +1349,7 @@ function renderAIAnalysisCampaignOptions() {
 
   if (!campaignCache.length) {
     select.innerHTML = `
-      <option value="">ยังไม่มีแคมเปญในระบบ</option>
+      <option value="">ยังไม่มีแคมเปญในระบบ หรือยังโหลดข้อมูลไม่สำเร็จ</option>
     `;
 
     updateAISelectedCampaignInfo();
@@ -1413,7 +1360,7 @@ function renderAIAnalysisCampaignOptions() {
     <option value="">-- เลือกแคมเปญ --</option>
     ${campaignCache.map(campaign => `
       <option value="${escapeHTML(campaign.id)}">
-        ${escapeHTML(campaign.name)}
+        ${escapeHTML(campaign.name || 'ไม่มีชื่อแคมเปญ')}
         (${escapeHTML(statusLabel(campaign.status))})
       </option>
     `).join('')}
@@ -1436,7 +1383,6 @@ function renderAIAnalysisCampaignOptions() {
 
 function getSelectedAICampaign() {
   const select = $('#nichaAIcampaignSelect');
-
   const id = select?.value || aiSelectedCampaignId;
 
   if (!id) return null;
@@ -1453,7 +1399,9 @@ function updateAISelectedCampaignInfo() {
 
   if (!campaign) {
     element.textContent =
-      'กรุณาเลือกแคมเปญเพื่อดูข้อมูลและเริ่มวิเคราะห์';
+      campaignCache.length
+        ? 'กรุณาเลือกแคมเปญเพื่อดูข้อมูลและเริ่มวิเคราะห์'
+        : 'ยังไม่มีข้อมูลแคมเปญ กรุณากดโหลดรายการแคมเปญใหม่';
 
     return;
   }
@@ -1475,7 +1423,7 @@ function updateAISelectedCampaignInfo() {
 }
 
 /* =====================================================
-   13. FREE AI - PROMPT GENERATOR
+   14. FREE AI - PROMPT GENERATOR
 ===================================================== */
 
 function buildNichaAIPrompt(campaign) {
@@ -1561,15 +1509,9 @@ ${JSON.stringify(campaignData, null, 2)}
   "bookingReadinessScore": 0,
   "trackingScore": 0,
   "recommendation": "READY / NEEDS_IMPROVEMENT / NOT_READY",
-  "strengths": [
-    "จุดแข็งข้อ 1"
-  ],
-  "problems": [
-    "ปัญหาข้อ 1"
-  ],
-  "suggestions": [
-    "ข้อเสนอแนะข้อ 1"
-  ],
+  "strengths": ["จุดแข็งข้อ 1"],
+  "problems": ["ปัญหาข้อ 1"],
+  "suggestions": ["ข้อเสนอแนะข้อ 1"],
   "worstCase": "คำอธิบายสถานการณ์แย่ที่สุด",
   "baseCase": "คำอธิบายสถานการณ์ปกติ",
   "bestCase": "คำอธิบายสถานการณ์ดีที่สุด",
@@ -1583,7 +1525,7 @@ ${JSON.stringify(campaignData, null, 2)}
 }
 
 /* =====================================================
-   14. FREE AI - EVENT BINDINGS
+   15. FREE AI - EVENT BINDINGS
 ===================================================== */
 
 function bindFreeAIEvents() {
@@ -1605,6 +1547,52 @@ function bindFreeAIEvents() {
     });
   }
 
+  const reloadButton = $('#nichaAIReloadCampaigns');
+
+  if (reloadButton) {
+    reloadButton.addEventListener('click', async () => {
+      setButtonLoading(reloadButton, true);
+
+      showFreeAIMessage(
+        'กำลังโหลดรายการแคมเปญจาก Google Sheets...',
+        'info'
+      );
+
+      try {
+        const campaigns = await loadCampaigns({
+          silent: false
+        });
+
+        if (campaigns.length) {
+          showFreeAIMessage(
+            'โหลดรายการแคมเปญสำเร็จ พบ ' +
+            campaigns.length +
+            ' แคมเปญ',
+            'success'
+          );
+        } else {
+          showFreeAIMessage(
+            'เชื่อมต่อได้ แต่ไม่พบรายการแคมเปญในข้อมูลที่ API ส่งกลับมา',
+            'error'
+          );
+        }
+
+      } catch (error) {
+        showFreeAIMessage(
+          'โหลดรายการแคมเปญไม่สำเร็จ\n\n' + error.message,
+          'error'
+        );
+
+      } finally {
+        setButtonLoading(
+          reloadButton,
+          false,
+          '↻ โหลดรายการแคมเปญใหม่'
+        );
+      }
+    });
+  }
+
   const generateButton = $('#nichaAIGeneratePrompt');
 
   if (generateButton) {
@@ -1620,7 +1608,6 @@ function bindFreeAIEvents() {
       }
 
       const promptText = buildNichaAIPrompt(campaign);
-
       const promptArea = $('#nichaAIPrompt');
 
       if (promptArea) {
@@ -1645,7 +1632,8 @@ function bindFreeAIEvents() {
 
   if (openButton) {
     openButton.addEventListener('click', () => {
-      const promptText = $('#nichaAIPrompt')?.value.trim() || '';
+      const promptText =
+        $('#nichaAIPrompt')?.value.trim() || '';
 
       if (!promptText) {
         showFreeAIMessage(
@@ -1683,11 +1671,12 @@ function showFreeAIMessage(message, type = 'info') {
 }
 
 /* =====================================================
-   15. FREE AI - COPY PROMPT
+   16. FREE AI - COPY PROMPT
 ===================================================== */
 
 async function copyNichaAIPrompt() {
-  const promptText = $('#nichaAIPrompt')?.value.trim() || '';
+  const promptText =
+    $('#nichaAIPrompt')?.value.trim() || '';
 
   if (!promptText) {
     showFreeAIMessage(
@@ -1730,7 +1719,7 @@ async function copyNichaAIPrompt() {
 }
 
 /* =====================================================
-   16. FREE AI - JSON VALIDATION
+   17. FREE AI - JSON VALIDATION
 ===================================================== */
 
 function parseManualAIResponse(rawText) {
@@ -1784,7 +1773,8 @@ function parseManualAIResponse(rawText) {
       value > 100
     ) {
       throw new Error(
-        'คะแนน ' + field + ' ต้องเป็นตัวเลขตั้งแต่ 0 ถึง 100'
+        'คะแนน ' + field +
+        ' ต้องเป็นตัวเลขตั้งแต่ 0 ถึง 100'
       );
     }
 
@@ -1846,7 +1836,7 @@ function parseManualAIResponse(rawText) {
 }
 
 /* =====================================================
-   17. FREE AI - SAVE TO GOOGLE SHEETS
+   18. FREE AI - SAVE TO GOOGLE SHEETS
 ===================================================== */
 
 async function saveManualAIAnalysis() {
@@ -1927,9 +1917,7 @@ async function saveManualAIAnalysis() {
 
         savedAnalysis = extractAnalysisResult(result);
 
-        if (savedAnalysis) {
-          break;
-        }
+        if (savedAnalysis) break;
 
       } catch (error) {
         lastError = error;
@@ -1966,13 +1954,15 @@ async function saveManualAIAnalysis() {
     console.error('Save manual AI analysis error:', error);
 
     showFreeAIMessage(
-      'ไม่สามารถส่งคำสั่งบันทึกได้\n\n' + error.message +
+      'ไม่สามารถส่งคำสั่งบันทึกได้\n\n' +
+      error.message +
       '\n\nกรุณาตรวจสอบชีต AI Analysis ก่อนลองอีกครั้ง',
       'error'
     );
 
   } finally {
     apiBusy = false;
+
     setButtonLoading(
       button,
       false,
@@ -1981,10 +1971,6 @@ async function saveManualAIAnalysis() {
   }
 }
 
-/**
- * รองรับผลลัพธ์ API ที่คืน analysis
- * หรือคืนข้อมูลวิเคราะห์เป็น object โดยตรง
- */
 function extractAnalysisResult(result) {
   if (!result) return null;
 
@@ -2015,7 +2001,7 @@ function extractAnalysisResult(result) {
 }
 
 /* =====================================================
-   18. FREE AI - LOAD LATEST ANALYSIS
+   19. FREE AI - LOAD LATEST ANALYSIS
 ===================================================== */
 
 async function loadLatestAIAnalysis() {
@@ -2082,12 +2068,16 @@ async function loadLatestAIAnalysis() {
     );
 
   } finally {
-    setButtonLoading(button, false, 'โหลดผลวิเคราะห์ล่าสุด');
+    setButtonLoading(
+      button,
+      false,
+      'โหลดผลวิเคราะห์ล่าสุด'
+    );
   }
 }
 
 /* =====================================================
-   19. FREE AI - DISPLAY ANALYSIS
+   20. FREE AI - DISPLAY ANALYSIS
 ===================================================== */
 
 function renderLatestAIAnalysis(analysis) {
@@ -2192,19 +2182,15 @@ function renderLatestAIAnalysis(analysis) {
 }
 
 /* =====================================================
-   20. LEGACY AI BUTTON
+   21. SETUP AI ANALYSIS
 ===================================================== */
 
-/**
- * ไม่ใช้ระบบประเมินแบบเดิมอีกต่อไป
- * ป้องกันการแสดงผลที่ทำให้เข้าใจว่าเป็น AI จริง
- */
 function setupAIAnalysis() {
   installAIAnalysisInterface();
 }
 
 /* =====================================================
-   21. BUDGET OVERVIEW
+   22. BUDGET OVERVIEW
 ===================================================== */
 
 function renderBudgetOverview() {
@@ -2242,7 +2228,7 @@ function renderBudgetOverview() {
 }
 
 /* =====================================================
-   22. SETTINGS / SYSTEM INFO
+   23. SETTINGS / SYSTEM INFO
 ===================================================== */
 
 function setupSystemInfo() {
@@ -2260,7 +2246,7 @@ function setupSystemInfo() {
 }
 
 /* =====================================================
-   23. API HEALTH CHECK
+   24. API HEALTH CHECK
 ===================================================== */
 
 async function checkApiHealth() {
@@ -2282,7 +2268,7 @@ async function checkApiHealth() {
 }
 
 /* =====================================================
-   24. INITIALIZE APPLICATION
+   25. INITIALIZE APPLICATION
 ===================================================== */
 
 async function initNichaAdsPro() {
@@ -2331,8 +2317,17 @@ async function initNichaAdsPro() {
         </tr>
       `;
     }
+
+    showFreeAIMessage(
+      'ยังโหลดรายการแคมเปญไม่ได้ กรุณาตรวจสอบการเชื่อมต่อ Google Apps Script แล้วกดโหลดรายการใหม่',
+      'error'
+    );
   }
 }
+
+/* =====================================================
+   26. START APPLICATION
+===================================================== */
 
 if (document.readyState === 'loading') {
   document.addEventListener(
