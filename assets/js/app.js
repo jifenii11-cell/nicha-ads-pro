@@ -2,7 +2,7 @@
 /*******************************************************
  * NICHA ADS PRO
  * FILE: assets/js/app.js
- * VERSION: 1.2.0
+ * VERSION: 1.2.2
  *
  * Frontend + Google Apps Script API
  *
@@ -30,7 +30,7 @@
 ===================================================== */
 
 const NICHA_ADS = {
-  version: '1.2.0',
+  version: '1.2.2',
 
   apiUrl:
     'https://script.google.com/macros/s/AKfycbzuezJjKGLvKe-5APlnuH6fl6F1HQLeN7tV5_qAvNTK1BsXOo4S_KIQPA_N8sLRR80o/exec',
@@ -578,24 +578,20 @@ function statusLabel(status) {
 }
 
 function renderCampaigns() {
-  const table = $('#campaignTable');
-
-  if (!table) return;
-
-  let tbody = table.querySelector('tbody');
+  // ใน index.html กำหนด campaignTable ไว้ที่ <tbody> โดยตรง
+  // จึงต้องเขียนข้อมูลลงใน element นี้ ไม่ต้องค้นหา <tbody> ซ้ำ
+  const tbody = $('#campaignTable');
 
   if (!tbody) {
-    tbody = document.createElement('tbody');
-    table.appendChild(tbody);
+    console.warn('ไม่พบ #campaignTable ในหน้าเว็บ');
+    return;
   }
 
   if (!campaignCache.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" class="empty-state">
-          ยังไม่มีแคมเปญ
-          <br>
-          <small>กดปุ่มสร้างแคมเปญเพื่อเริ่มต้น</small>
+        <td colspan="4" class="table-empty">
+          ยังไม่มีข้อมูลแคมเปญ
         </td>
       </tr>
     `;
@@ -610,64 +606,33 @@ function renderCampaigns() {
     const canDecide =
       campaign.status === 'pending';
 
+    const actionButtons = `
+      ${
+        canSubmit
+          ? `<button type="button" data-submit-approval="${escapeHTML(campaign.id)}">ส่งอนุมัติ</button>`
+          : ''
+      }
+      ${
+        canDecide
+          ? `
+            <button type="button" data-approve-campaign="${escapeHTML(campaign.id)}">อนุมัติ</button>
+            <button type="button" data-reject-campaign="${escapeHTML(campaign.id)}">ปฏิเสธ</button>
+          `
+          : ''
+      }
+      <button type="button" data-delete-campaign="${escapeHTML(campaign.id)}">ลบ</button>
+    `;
+
     return `
       <tr>
-        <td>${escapeHTML(campaign.name)}</td>
-
-        <td>${escapeHTML(campaign.platform || '-')}</td>
-
-        <td>${escapeHTML(campaign.goal)}</td>
-
+        <td>${escapeHTML(campaign.name || '-')}</td>
+        <td>${escapeHTML(campaign.goal || '-')}</td>
         <td>${formatMoney(campaign.budget)}</td>
-
-        <td>${escapeHTML(campaign.days || '-')} วัน</td>
-
         <td>
           <span class="status-${escapeHTML(campaign.status)}">
             ${escapeHTML(statusLabel(campaign.status))}
           </span>
-        </td>
-
-        <td>
-          ${
-            canSubmit
-              ? `
-                <button
-                  type="button"
-                  data-submit-approval="${escapeHTML(campaign.id)}"
-                >
-                  ส่งอนุมัติ
-                </button>
-              `
-              : ''
-          }
-
-          ${
-            canDecide
-              ? `
-                <button
-                  type="button"
-                  data-approve-campaign="${escapeHTML(campaign.id)}"
-                >
-                  อนุมัติ
-                </button>
-
-                <button
-                  type="button"
-                  data-reject-campaign="${escapeHTML(campaign.id)}"
-                >
-                  ปฏิเสธ
-                </button>
-              `
-              : ''
-          }
-
-          <button
-            type="button"
-            data-delete-campaign="${escapeHTML(campaign.id)}"
-          >
-            ลบ
-          </button>
+          <div class="campaign-actions">${actionButtons}</div>
         </td>
       </tr>
     `;
@@ -735,7 +700,7 @@ async function createCampaignRecord(data) {
         name: data.name,
         goal: data.goal,
         platform: data.platform || 'ยังไม่เลือก',
-        targetArea: data.targetArea || 'แม่ออน เชียงใหม่',
+        targetArea: data.targetArea || 'แม่อ่อน เชียงใหม่',
         audience: data.audience || '',
         service: data.service || '',
         offer: data.offer || '',
@@ -750,7 +715,6 @@ async function createCampaignRecord(data) {
         item.name === data.name &&
         item.goal === data.goal &&
         Number(item.budget) === Number(data.budget) &&
-        Number(item.days) === Number(data.days) &&
         (
           !item.createdAt ||
           new Date(item.createdAt).getTime() >= createdAfter - 30000
@@ -767,7 +731,7 @@ async function createCampaignRecord(data) {
         'สร้างแคมเปญและตรวจสอบข้อมูลใน Google Sheets สำเร็จแล้ว\n\n' +
         'ชื่อ: ' + campaign.name +
         '\nงบประมาณ: ' + formatMoney(campaign.budget) +
-        '\nระยะเวลา: ' + campaign.days + ' วัน' +
+        '\nระยะเวลา: ' + (campaign.days || '-') + ' วัน' +
         '\nงบเฉลี่ยต่อวัน: ' + formatMoney(campaign.dailyBudget) +
         '\nสถานะ: ฉบับร่าง'
       );
@@ -857,7 +821,7 @@ function openCreateCampaign() {
 
   const targetArea = prompt(
     'พื้นที่กลุ่มเป้าหมาย',
-    'แม่ออน เชียงใหม่'
+    'แม่อ่อน เชียงใหม่'
   );
 
   if (targetArea === null) return;
@@ -1290,16 +1254,12 @@ async function initNichaAdsPro() {
       error
     );
 
-    const table = $('#campaignTable');
+    const tbody = $('#campaignTable');
 
-    if (table) {
-      const tbody =
-        table.querySelector('tbody') ||
-        table.appendChild(document.createElement('tbody'));
-
+    if (tbody) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="8" class="empty-state">
+          <td colspan="4" class="table-empty">
             ไม่สามารถโหลดข้อมูลจาก Google Sheets ได้
             <br>
             <small>
